@@ -4,78 +4,121 @@
 #define INTERRUPT 2
 #define PIN_M_DLEN 3
 #define PIN_S_DLEN 4
-
+#define CLOCK 5
+#define DATA_PIN 6
 #define MASTER 3
 #define SLAVE 4
-int LCDAddr = 0x01;
 
 
+
+/**
 //Multiplexer
 //PCF85574
 // addr : 0x20
 
 //LCD Contorllers
 //PCF2111T Master;
-// addr : 0x01 1
-// DLEN : 3
+   addr : 0x01 1
+   DLEN : 3
 //PCF2111T Slave;
-// addr : 0x01
-// DLEN : 4
+   addr : 0x01
+   DLEN : 4
 
-//Board  I2C / TWI pins
-//Uno, A4 (SDA), A5 (SCL)
+  Board  I2C / TWI pins
+  Uno, A4 (SDA), A5 (SCL)
 
 
-//CBUS PROCEEDURE
-//DLEN High -> clock start -> data after 1 clock pulse
+   ---CBUS PROCEEDURE---------------------------------
+   DLEN High -> clock start -> data after 1 clock pulse
 
-/** RISING EDGE OF TIMING MODUEL
- * cbus_send_bit - sends one bit over the bus
- * @host: the host we're using
- * @bit: one bit of information to send
- * 
- */
+   When DATA bit 33 is a HIGH, the A-latches (BP1) are loaded. With DATA bit 33 LOW, the
+**/
 
-void LCD_Talk(int addr, char* Message ){ //will work on the message tramsission when talking established
-                                        //don't think char will work hahaa
-  int x = 0;
-  if (addr = MASTER){
-    digitalWrite(PIN_M_DLEN, HIGH);
+void LCD_Talk(unsigned char addr, char* myString, bool leadbyte ){
+//  shiftOut(dataPin, clockPin, bitOrder, value)
+  int i = 0, len = strlen(myString);
+
+  //Write DLEN HIGH
+  ////////////////////////////
+  if (addr == MASTER){
+   digitalWrite(CLOCK, HIGH);
+   shiftOut(DATA_PIN, CLOCK, MSBFIRST,0x01);
+   digitalWrite(CLOCK, LOW);
+   delay(10);
+   digitalWrite(CLOCK, HIGH);
+   delay(10);
+   digitalWrite(CLOCK, LOW);
+   digitalWrite(PIN_M_DLEN, HIGH);
+  }
+  else if (addr == SLAVE){
+   digitalWrite(CLOCK, HIGH);
+   shiftOut(DATA_PIN, CLOCK, MSBFIRST,0x01);
+   digitalWrite(CLOCK, LOW);
+   delay(10);
+   digitalWrite(CLOCK, HIGH);
+   delay(10);
+   digitalWrite(CLOCK, LOW);
+   digitalWrite(PIN_S_DLEN, HIGH);
   }
   else{
-    digitalWrite(PIN_S_DLEN, HIGH);
+    //do something, Think might just put IO Expander here?
+    // so say, pass the data to wire type function to push and address normally
+    //or
+    digitalWrite(CLOCK, HIGH);
+    shiftOut(DATA_PIN, CLOCK, MSBFIRST,addr);
+    digitalWrite(CLOCK, LOW);
+    delay(10);
+    digitalWrite(CLOCK, HIGH);
+    //digitalWrite //Data Pin to read acknowledgement... how? 
+                 //Use another pin to monitor the state of the data buss?      
+    }
+ 
+  //Sending Leading byte
+  if (leadbyte == true){
+    digitalWrite(CLOCK, HIGH);
+    delay(10);
+    digitalWrite(CLOCK, LOW);
+    delay(10);
+    digitalWrite(CLOCK, HIGH);
+    shiftOut(DATA_PIN,CLOCK,MSBFIRST,0); 
+    digitalWrite(CLOCK, LOW); 
   }
-  Wire.beginTransmission(LCDAddr); // transmit to device #1
-  Wire.write(x);
   
-  Wire.endTransmission();
+  //Sending out the Data
+  ///////////////////////////////
+  for (i = 0; i < len; i++ ){
+    char j = myString[i];
+    digitalWrite(CLOCK, HIGH);
+    shiftOut(DATA_PIN, CLOCK, MSBFIRST,j);
+    digitalWrite(CLOCK, LOW);
 
-  
-  if (addr = MASTER){
-    digitalWrite(PIN_M_DLEN, LOW);
   }
-  else{
-    digitalWrite(PIN_S_DLEN, LOW);
+  //Write DLEN BACK LOW
+  /////////////////////////
+  if (addr == MASTER) digitalWrite(PIN_M_DLEN, LOW);
+  else if (addr == SLAVE) digitalWrite(PIN_S_DLEN, LOW);
+  else {
+    
   }
-  
-
 }
 
-/**static void cbus_send_bit(struct cbus_host *host, unsigned bit)
-{
-  gpiod_set_value(host->dat, bit ? 1 : 0);
-  gpiod_set_value(host->clk, 1);
-  gpiod_set_value(host->clk, 0);
-}**/
+
+
+
 
 void setup() { 
   Wire.begin();
   Serial.begin(9600);
   Serial.println("Setup");
+
+  
   pinMode(PIN_M_DLEN, OUTPUT);
   digitalWrite(PIN_M_DLEN, LOW);
   pinMode(PIN_S_DLEN, OUTPUT);
   digitalWrite(PIN_S_DLEN, LOW);
+  digitalWrite(CLOCK, LOW);
+  pinMode(DATA_PIN, OUTPUT);
+
   //pinMode(INTERRUPT, INPUT_PULLUP);
 
 
@@ -86,13 +129,7 @@ void setup() {
    Serial.println("\nprogram start ");
 
 }
-
 void loop() {
+  // put your main code here, to run repeatedly:
 
-  char Message[] = "x to z"; // 5 bytes
-
-  LCD_Talk(MASTER, Message);
-  //Wire.beginTransmission(1);
-  delay(100)
-  buttonWait(9);
 }

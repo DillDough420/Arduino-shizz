@@ -19,7 +19,7 @@ addr : 0x01 1
 /**
  * LCD storage
  * 
- * Defined in a 3 dimensional  array of LCD_array[Chip][BackPlane][OutputPin]
+ * Defined in a 2 dimensional  array of LCD_MASTERLAVE[BackPlane][OutputData]
  * 
  * Going to define an array of 2rows,
  * 
@@ -27,6 +27,8 @@ addr : 0x01 1
  * colum 1 is Backplane A
  *  
  * 
+ * 
+ * I2c communicaion, the busses are left high when no data is to be transmitted
  * 
  * 
  **/
@@ -38,6 +40,7 @@ addr : 0x01 1
 
 
 #define CBUS_DATA_STREAM 31
+#define BACKPLANE_DATA 1
 
 #define BACKPLANE_A HIGH
 #define BACKPLANE_B LOW
@@ -51,14 +54,21 @@ addr : 0x01 1
 #define ACK LOW
 // so i can change the clocking speed of the data.. I'm lazy
 #define DELAY 1
+bool ERRORFLAG = false;
 
+char LCD_Master[BACKPLANE_DATA][CBUS_DATA_STREAM];
+
+char LCD_Slave[BACKPLANE_DATA][CBUS_DATA_STREAM];
+
+
+/**
 void LCD_array(){
   char LCD_array[1][32] = {};
-}
+}*/
 
 /**Controls CBUS routine
  *  sends out all data to relevant functions then shuts off comunication*/
-void cbus_format_data(unsigned data, unsigned chip_select, unsigned backplane)
+void cbus_format_data(unsigned long data, char chip_select, char backplane)
 {
  //CBUS START ROUTINE
   i2c_start_condition();
@@ -71,17 +81,18 @@ void cbus_format_data(unsigned data, unsigned chip_select, unsigned backplane)
   digitalWrite(chip_select, LOW);
   clock_pulse();
   digitalWrite(DATA_PIN, HIGH );
+  delay(DELAY);
   digitalWrite(CLOCK, HIGH);
 }
 
 /** sends that all vital S33 bit to control the backplane select*/
-void cbus_backplane(unsigned backplane){
+void cbus_backplane(char backplane){
 digitalWrite(DATA_PIN, backplane);
 delay(DELAY);
 clock_pulse();
-
-
 }
+
+
 /** clock pulse, does what it says on the can */
 void clock_pulse(){
   digitalWrite(CLOCK, HIGH);
@@ -91,7 +102,7 @@ void clock_pulse(){
 
 
 /** Controls chip select for CBUS */
-void cbus_start_condition(unsinged chip_select){
+void cbus_start_condition(char chip_select){
   digitalWrite(DATA_PIN, LOW);
   digitalWrite(chip_select, HIGH);
   delay(DELAY);
@@ -99,25 +110,33 @@ void cbus_start_condition(unsinged chip_select){
 }
 
 
-//WIP
-void i2c_io_handle (int addr, unsigned data){
-    i2c_start_condition()
-    bool ack =i2c_addr_out(addr)
-    if ack == true{
-      i2c_Transmit()
-    }
-    else{
-        //flag error here
-    
-    }
-    i2c_stop_condition()
-  }
+void error(){
+  //update_array(chip select, backplane select, )
+  //We want this to flash a particular element on the LCD or even the backlight.
+  //serial.Write "Error State"
 }
 
-bool i2c_addr_out(int addr){
+
+
+//WIP
+void i2c_io_handle (char addr, unsigned long data){
+  i2c_start_condition();
+  bool ack =i2c_addr_out(addr);
+  if (ack == true){
+    i2c_Transmit(data);
+  }
+  else{
+      ERRORFLAG = true;
+    
+  }
+    i2c_stop_condition();
+
+}
+
+bool i2c_addr_out(char addr){
   i2c_Transmit(addr);
   bool ack = i2c_get_ack();
-  return ack
+  return ack;
 }
 
 /**
@@ -126,11 +145,11 @@ bool i2c_addr_out(int addr){
  * @data: the data to send
  * @len: size of the transfer
  */
-void cbus_send_data(unsigned data, unsigned len)
+void cbus_send_data(unsigned data, char len)
 {
-	int i;
-	for (i = len; i > 0; i--)
-		cbus_send_bit(data & (1 << (i - 1)));
+  int i;
+  for (i = len; i > 0; i--)
+    cbus_send_bit(data & (1 << (i - 1)));
 }
 
 /**
@@ -139,7 +158,7 @@ void cbus_send_data(unsigned data, unsigned len)
  *remebering one clock cycle is requred per bit.
  *so data high or low is inputted, then clock is pulsed up and down
  */
-void cbus_send_bit( unsigned bit )
+void cbus_send_bit( char bit )
 {
   digitalWrite(DATA_PIN, bit);
   delay(DELAY);
@@ -170,7 +189,7 @@ void i2c_stop_condition()
 
 
 //I2C trasmitting 8 bits to slave
-bool i2c_Transmit(unsigned data)
+bool i2c_Transmit(unsigned long data)
 {
    for (int i=0; i<8; i++)
   { if (data & 0x80){
@@ -192,8 +211,8 @@ bool i2c_get_ack()
 {
   digitalWrite(DATA_PIN, HIGH);
   digitalWrite(CLOCK, HIGH);
-  delay(DELAY)
-  bool ack digitalRead(DATA_PIN);
+  delay(DELAY);
+  bool ack = digitalRead(DATA_PIN);
   if (ack == ACK){
     return true;
   }
@@ -219,11 +238,11 @@ void buttonWait(int buttonPin){
 */
 void clear_LCD(){
   char * LCD_array[1][1][CBUS_DATA_STREAM] = {};
-  LCD_UPDATE(LCD_array);
+//  LCD_UPDATE(LCD_array);
 }
 
-
-
+//Rewritee this function to accomedate global Master and Slave arrays declared t top of statement
+//might still have to pass binary ahahah
 /**This Meaty Function breaks up the LCD array into 
  * its component parts, and sends them to be formatted
  * 
@@ -237,51 +256,10 @@ void clear_LCD(){
  * byte to be sent to the display
  *  
  **/
+
 void LCD_UPDATE(char LCD_array[1][1][CBUS_DATA_STREAM]){
-  int data;
-  
-  //Writting Master CHIP
-  //Backplane A
-  for (int i = 0, i < CBUS_DATA_STREAM, i++){
-    int temp = LCD_array[MASTER][BACKPLANE_A][i]
-    data += temp*10^i
-  }
-  int Master_A = binaryToDecimal(data);
-  data = 0;
-  //Backplane B
-  for (int i = 0, i < CBUS_DATA_STREAM, i++){
-    int temp = LCD_array[MASTER][BACKPLANE_B][i];
-    data += temp*10^i;
-  }
-  int Master_B = binaryToDecimal(data);
-  data = 0;
-  
-  //Writting Slave Chip
-  //Backplane A
-  for (int i = 0, i < CBUS_DATA_STREAM, i++){
-    int temp = LCD_array[MASTER][BACKPLANE_A][i]
-    data += temp*10^i
-  }
-  int Slave_A = binaryToDecimal(data);
-  data = 0
-  // Backplane B
-  for (int i = 0, i < CBUS_DATA_STREAM, i++){
-    int temp = LCD_array[MASTER][BACKPLANE_A][i]
-    data += temp*10^i
-  }
-  int Slave_B = binaryToDecimal(data);
 
 
-  //SENDING THE DATA TO BE WRITTEN
-  //This feels in efficent
-  cbus_format_data(Master_A, MASTER, BACKPLANE_A);
-  cbus_format_data(Master_B, MASTER, BACKPLANE_B);
-  cbus_format_data(Slave_A, SLAVE), BACKPLANE_A;
-  cbus_format_data(Slave_B, SLAVE, BACKPLANE_B);
-
-}
-
-// Function to convert binary to decimal
 int binaryToDecimal(int n)
 {
     int num = n, dec_value = 0, base = 1, temp = num;
@@ -310,8 +288,6 @@ void setup() {
   digitalWrite(DLEN_S,LOW);
 
   Serial.print("Program Start");
-  char *LCD_array;
-
   clear_LCD();
  // LCD_UPDATE(LCD_array);
 
@@ -325,7 +301,13 @@ void setup() {
 
 // the loop function runs over and over again forever
 void loop() {
+
   char data, len = '1';
+  if (ERRORFLAG == true)
+  {
+    error();
+  }
+
 
   for (int i = 0; i < 126; i++ ){
     cbus_send_data(data, len );
